@@ -1,49 +1,49 @@
 # encoding=utf-8
 import socket
-import os
 import hashlib
 import struct
 
-HOST = '192.168.48.137'
+HOST = '192.168.48.137 '
 PORT = 12345
 BUFFER_SIZE = 1024
 HEAD_STRUCT = '128sIq'
+info_size = struct.calcsize(HEAD_STRUCT)
 
 
 
-def get_file_info(file_path):
-    file_name = os.path.basename(file_path)
-    file_name_len = len(file_name)
-    file_size = os.path.getsize(file_path)
-    return file_name, file_name_len, file_size
+
+def unpack_file_info(file_info):
+    file_name, file_name_len, file_size = struct.unpack(HEAD_STRUCT, file_info)
+    file_name = file_name[:file_name_len]
+    return file_name, file_size
 
 
-def send_file(file_path):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_address = (HOST, PORT)
-
-    file_name, file_name_len, file_size= get_file_info(file_path)
-    file_head = struct.pack(HEAD_STRUCT, file_name, file_name_len, file_size)
-
+def recv_file():
     try:
-        print "Start connect"
-        sock.connect(server_address)
-        sock.send(file_head)
-        sent_size = 0
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_address = (HOST, PORT)
+        sock.bind(server_address)
+	print 'Waiting connection'
+        sock.listen(1)
+        client_socket, client_address = sock.accept()
+        print "Connected %s successfully" % str(client_address)
 
-        with open(file_path) as fr:
-            while sent_size < file_size:
-                remained_size = file_size - sent_size
-                send_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
-                send_file = fr.read(send_size)
-                sent_size += send_size
-                sock.send(send_file)
+        file_info_package = client_socket.recv(info_size)
+        file_name, file_size = unpack_file_info(file_info_package)
+
+        recved_size = 0
+        with open(file_name, 'wb') as fw:
+            while recved_size < file_size:
+                remained_size = file_size - recved_size
+                recv_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
+                recv_file = client_socket.recv(recv_size)
+                recved_size += recv_size
+                fw.write(recv_file)
+            print 'Received successfully'
     except socket.errno, e:
         print "Socket error: %s" % str(e)
     finally:
         sock.close()
-        print "Closing connect"
 
 if __name__ == '__main__':
-    file_path = raw_input('Please input file path:')
-    send_file(file_path)
+    recv_file()
